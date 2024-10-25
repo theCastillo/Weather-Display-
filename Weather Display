@@ -1,0 +1,63 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <ArduinoJson.h>
+
+const char* ssid = "Mona33";
+const char* password = "Mona152993";
+const char* apiKey = "b605efe5e69db2e0ba81ace2511ad438";
+
+String cachedWeatherData = "";                  // Store cached weather data
+unsigned long lastRefreshTime = 0;              // Store the timestamp of the last cache refresh
+const unsigned long refreshInterval = 1800000;  // Refresh every half hour (in milliseconds)
+int Pin = 16;
+void setup() {
+  Serial.begin(9600);
+  pinMode(Pin, OUTPUT);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
+}
+
+void loop() {
+  // Check if cached data is valid
+  if (millis() - lastRefreshTime < refreshInterval && cachedWeatherData != "") {
+    // Use cached data
+    String weatherText = cachedWeatherData;
+    processWeatherData(weatherText);  // Process the cached data
+  } else {
+    // Fetch fresh data from weatherstack
+    String url = "http://api.weatherstack.com/current?access_key=" + String(apiKey) + "&query=North Attleboro,United States of America";
+    WiFiClient client;  // Create a WiFiClient object
+    HTTPClient http;
+    http.begin(client, url);  // Use the correct begin method
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      String payload = http.getString();
+      cachedWeatherData = payload;  // Update cache with fresh data
+      lastRefreshTime = millis();   // Store current timestamp
+
+      processWeatherData(payload);  // Process the fresh data
+    }
+
+    http.end();
+  }
+
+  // Wait for half an hour
+  delay(refreshInterval);
+}
+
+void processWeatherData(String weatherText) {
+  // Print weather reading to serial monitor
+  Serial.println("Weather Reading: " + weatherText);
+
+  // Check if weather is "cloudy," "mostly cloudy," or "partly cloudy" and control the LED accordingly
+  if (weatherText.indexOf("Sunny") != -1 || weatherText.indexOf("Mostly sunny") != -1 || weatherText.indexOf("Partly sunny") != -1) {
+    digitalWrite(Pin, LOW);  // Turn LED off
+  } else {
+    digitalWrite(Pin, HIGH);  // Turn LED on
+  }
+}
